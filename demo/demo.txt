@@ -1,0 +1,31 @@
+## Message: 帮我按照文件的格式写一下教案
+## Ans：
+Format、Rewrite、Strip_MD
+
+## Message：你帮我查查国内领先的AI公司都有哪些？
+## Ans:
+Search、Strip_MD
+
+## Message：帮我看看我的PPT里面有没有要更新的内容
+## Ans:
+Make_Question、Search、Write_MarkDown
+
+## Messgae：帮我做一下这个文件的总结
+## Ans：
+Summary、Strip_MD
+
+## Message: 这是我的教案格式，请帮我写一个教案
+## Ans：
+Format、Rewrite、Strip_MD
+
+## Message: 请介绍一下AI绘画的最新进展
+## Ans：
+Search、Strip_MD
+
+## Message: 请看看关于文档内容的最新进展
+## Ans：
+Make_Question、Search、Strip_MD
+
+## Message：请更新一下我的PPT
+## Ans:
+Make_Question、Search、Write_MarkDown

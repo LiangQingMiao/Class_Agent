@@ -1,0 +1,44 @@
+## Message：你帮我查查国内领先的AI公司都有哪些？
+## Action:
+>think:用户让我查一查，问题比较明确，可以直接搜索
+OK
+>Search("用户问题")
+OK
+>Successfully！Task end
+
+
+## Message：帮我看一下这个文件里讲了什么？
+## Action：
+>think：用户需要让我理解一下这个文件
+OK
+>Understand()
+OK
+>Successfully！Task end
+
+
+## Message：这是我的PPT，你帮我检查一下其中有没有过时的内容。
+## Action：
+>think:用户需要让我理解PPT的内容
+OK
+>Understand()
+OK
+>think:然后我需要进行联网搜索检查内容是否正确
+OK
+>Search("文件内容")
+OK
+>Successfully！Task end
+
+
+## Message：这是文件的格式，请你按照文件里的要求写一个教案，你帮我写一下教案吧
+## Action：
+>think:需要先理解文件中的内容
+OK
+>Understand
+OK
+>think：根据教案格式，撰写内容
+OK
+>Wirte
+OK
+>Successfully！Task end
+
+

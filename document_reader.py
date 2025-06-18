@@ -1,0 +1,312 @@
+# -*- coding: utf-8 -*-
+"""
+多格式文档读取工具
+安装依赖：pip install langchain langchain-community python-docx openpyxl python-pptx pypdf pandas
+这个脚本使用langchain和其他常用库来读取各种文件格式的内容，包括：
+- 纯文本文件（txt、md、r等代码文件）
+- Office文档（Word、Excel、PPT）
+- PDF文件
+- 其他常见办公文件格式
+
+
+使用方式:
+from document_reader import DocumentReader
+reader = DocumentReader()
+content = reader.read_document('test.docx')
+print(content)
+
+"""
+
+import os
+import sys
+import pandas as pd
+from typing import Dict, List, Optional, Any, Union
+
+# 尝试导入所需的库，如果不存在则提示安装
+try:
+    from langchain_community.document_loaders import (
+        TextLoader, 
+        UnstructuredMarkdownLoader,
+        UnstructuredPDFLoader,
+        UnstructuredWordDocumentLoader,
+        UnstructuredExcelLoader,
+        UnstructuredPowerPointLoader,
+        CSVLoader,
+        UnstructuredFileLoader,
+        PyPDFLoader
+    )
+    import docx
+    import openpyxl
+    from pptx import Presentation
+    from pypdf import PdfReader
+except ImportError as e:
+    missing_lib = str(e).split("'")
+    if len(missing_lib) >= 2:
+        print(f"缺少必要的库: {missing_lib[1]}")
+        print(f"请运行: pip install {missing_lib[1]}")
+    else:
+        print(f"缺少必要的库: {str(e)}")
+        print("请安装以下库:")
+        print("pip install langchain langchain-community python-docx openpyxl python-pptx pypdf pandas")
+    sys.exit(1)
+
+
+class DocumentReader:
+    """文档读取器类，用于读取各种格式的文档"""
+    
+    def __init__(self):
+        # 文件扩展名到加载器的映射
+        self.extension_map = {
+            # 纯文本和代码文件
+            '.txt': self._load_text,
+            '.md': self._load_markdown,
+            '.py': self._load_text,
+            '.r': self._load_text,
+            '.java': self._load_text,
+            '.js': self._load_text,
+            '.html': self._load_text,
+            '.css': self._load_text,
+            '.json': self._load_text,
+            '.xml': self._load_text,
+            '.csv': self._load_csv,
+            
+            # Office文档
+            '.docx': self._load_docx,
+            '.doc': self._load_docx,  # 注意：旧版doc可能需要额外处理
+            '.xlsx': self._load_excel,
+            '.xls': self._load_excel,  # 注意：旧版xls可能需要额外处理
+            '.pptx': self._load_ppt,
+            '.ppt': self._load_ppt,  # 注意：旧版ppt可能需要额外处理
+            
+            # PDF文件
+            '.pdf': self._load_pdf,
+        }
+    
+    def read_document(self, file_path: str) -> Union[str, List[Dict[str, Any]], None]:
+        """读取文档内容
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            文档内容（字符串或结构化数据）
+        """
+        if not os.path.exists(file_path):
+            print(f"错误：文件 '{file_path}' 不存在")
+            return None
+        
+        _, file_extension = os.path.splitext(file_path.lower())
+        
+        # 检查是否支持该文件类型
+        if file_extension in self.extension_map:
+            try:
+                return self.extension_map[file_extension](file_path)
+            except Exception as e:
+                print(f"读取文件 '{file_path}' 时出错: {str(e)}")
+                return None
+        else:
+            # 尝试使用通用加载器
+            try:
+                return self._load_generic(file_path)
+            except Exception as e:
+                print(f"无法读取未知格式的文件 '{file_path}': {str(e)}")
+                print(f"支持的文件格式: {', '.join(self.extension_map.keys())}")
+                return None
+    
+    def _extract_text_from_documents(self, documents):
+        """从langchain文档对象中提取文本"""
+        if not documents:
+            return ""
+        return "\n\n".join([doc.page_content for doc in documents])
+    
+    def _load_text(self, file_path: str) -> str:
+        """加载纯文本文件"""
+        try:
+            loader = TextLoader(file_path, encoding='utf-8')
+            documents = loader.load()
+            return self._extract_text_from_documents(documents)
+        except UnicodeDecodeError:
+            # 如果UTF-8解码失败，尝试其他编码
+            try:
+                loader = TextLoader(file_path, encoding='gbk')
+                documents = loader.load()
+                return self._extract_text_from_documents(documents)
+            except:
+                # 如果仍然失败，使用二进制模式读取
+                with open(file_path, 'rb') as file:
+                    content = file.read()
+                    # 尝试多种编码
+                    for encoding in ['utf-8', 'gbk', 'latin-1', 'iso-8859-1']:
+                        try:
+                            return content.decode(encoding)
+                        except UnicodeDecodeError:
+                            continue
+                    # 如果所有编码都失败，返回原始内容的字符串表示
+                    return str(content)
+    
+    def _load_markdown(self, file_path: str) -> str:
+        """加载Markdown文件"""
+        try:
+            loader = UnstructuredMarkdownLoader(file_path)
+            documents = loader.load()
+            return self._extract_text_from_documents(documents)
+        except Exception:
+            # 如果UnstructuredMarkdownLoader失败，回退到TextLoader
+            return self._load_text(file_path)
+    
+    def _load_csv(self, file_path: str) -> Union[str, pd.DataFrame]:
+        """加载CSV文件"""
+        try:
+            # 首先尝试使用pandas读取，以获取结构化数据
+            df = pd.read_csv(file_path)
+            # 同时返回DataFrame和文本表示
+            return df.to_string()
+        except Exception:
+            # 如果pandas读取失败，尝试使用CSVLoader
+            try:
+                loader = CSVLoader(file_path)
+                documents = loader.load()
+                return self._extract_text_from_documents(documents)
+            except Exception:
+                # 如果CSVLoader也失败，回退到TextLoader
+                return self._load_text(file_path)
+    
+    def _load_docx(self, file_path: str) -> str:
+        """加载Word文档"""
+        try:
+            # 首先尝试使用langchain的加载器
+            loader = UnstructuredWordDocumentLoader(file_path)
+            documents = loader.load()
+            return self._extract_text_from_documents(documents)
+        except Exception:
+            # 如果langchain加载器失败，使用python-docx
+            try:
+                doc = docx.Document(file_path)
+                full_text = []
+                for para in doc.paragraphs:
+                    full_text.append(para.text)
+                return '\n'.join(full_text)
+            except Exception as e:
+                print(f"无法读取Word文档: {str(e)}")
+                return ""
+    
+    def _load_excel(self, file_path: str) -> str:
+        """加载Excel文件"""
+        try:
+            # 首先尝试使用langchain的加载器
+            loader = UnstructuredExcelLoader(file_path)
+            documents = loader.load()
+            return self._extract_text_from_documents(documents)
+        except Exception:
+            # 如果langchain加载器失败，使用openpyxl
+            try:
+                workbook = openpyxl.load_workbook(file_path, data_only=True)
+                result = []
+                
+                for sheet_name in workbook.sheetnames:
+                    sheet = workbook[sheet_name]
+                    result.append(f"Sheet: {sheet_name}")
+                    
+                    for row in sheet.iter_rows(values_only=True):
+                        row_values = [str(cell) if cell is not None else "" for cell in row]
+                        result.append("\t".join(row_values))
+                    
+                    result.append("\n")
+                
+                return "\n".join(result)
+            except Exception as e:
+                print(f"无法读取Excel文件: {str(e)}")
+                return ""
+    
+    def _load_ppt(self, file_path: str) -> str:
+        """加载PowerPoint文件"""
+        try:
+            # 首先尝试使用langchain的加载器
+            loader = UnstructuredPowerPointLoader(file_path)
+            documents = loader.load()
+            return self._extract_text_from_documents(documents)
+        except Exception:
+            # 如果langchain加载器失败，使用python-pptx
+            try:
+                prs = Presentation(file_path)
+                text_runs = []
+                
+                for slide in prs.slides:
+                    text_runs.append("--- 新幻灯片 ---")
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text") and shape.text:
+                            text_runs.append(shape.text)
+                
+                return "\n".join(text_runs)
+            except Exception as e:
+                print(f"无法读取PowerPoint文件: {str(e)}")
+                return ""
+    
+    def _load_pdf(self, file_path: str) -> str:
+        """加载PDF文件"""
+        try:
+            # 首先尝试使用PyPDFLoader
+            loader = PyPDFLoader(file_path)
+            documents = loader.load()
+            return self._extract_text_from_documents(documents)
+        except Exception:
+            # 如果PyPDFLoader失败，尝试UnstructuredPDFLoader
+            try:
+                loader = UnstructuredPDFLoader(file_path)
+                documents = loader.load()
+                return self._extract_text_from_documents(documents)
+            except Exception:
+                # 如果UnstructuredPDFLoader也失败，使用pypdf
+                try:
+                    reader = PdfReader(file_path)
+                    text = []
+                    for page in reader.pages:
+                        text.append(page.extract_text())
+                    return "\n\n".join(text)
+                except Exception as e:
+                    print(f"无法读取PDF文件: {str(e)}")
+                    return ""
+    
+    def _load_generic(self, file_path: str) -> str:
+        """尝试使用通用加载器加载未知格式的文件"""
+        try:
+            loader = UnstructuredFileLoader(file_path)
+            documents = loader.load()
+            return self._extract_text_from_documents(documents)
+        except Exception as e:
+            print(f"通用加载器无法读取文件: {str(e)}")
+            # 最后尝试作为二进制文件读取
+            try:
+                with open(file_path, 'rb') as file:
+                    content = file.read()
+                    # 尝试多种编码
+                    for encoding in ['utf-8', 'gbk', 'latin-1', 'iso-8859-1']:
+                        try:
+                            return content.decode(encoding)
+                        except UnicodeDecodeError:
+                            continue
+                    # 如果所有编码都失败，返回错误信息
+                    return "无法解码文件内容，可能是二进制文件。"
+            except Exception as e:
+                return f"无法读取文件: {str(e)}"
+
+if __name__ == "__main__":
+    # main()
+    test_dir = 'uploads'
+    if not os.path.exists(test_dir):
+        print(f"错误：测试目录 '{test_dir}' 不存在。")
+        sys.exit(1)
+
+    reader = DocumentReader()
+
+    for root, _, files in os.walk(test_dir):
+        for file in files:
+            file_path = os.path.join(root, file)
+            print(f"\n--- 正在读取文件: {file_path} ---")
+            content = reader.read_document(file_path)
+            
+            if content is not None:
+                print("\n文件内容:\n")
+                print(content)
+            else:
+                print(f"无法读取文件: {file_path}")
